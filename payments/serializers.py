@@ -1,22 +1,20 @@
 from rest_framework import serializers
-from .models import Payment, Sale_Payment
+from sales.models import Payment
 
 class PaymentSerializer(serializers.ModelSerializer):
     payment_method_choices = serializers.SerializerMethodField()
-    service_name = serializers.SerializerMethodField()
+    invoice_number = serializers.SerializerMethodField()
+    total_invoice_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
-        fields = ['id', 'service_name', 'amount_paid', 'date_paid', 'payment_method', 'transaction_id', 'remarks', 'payment_method_choices']
+        fields = ['id', 'invoice_number', 'total_invoice_amount', 'amount_paid', 'date_paid', 'payment_method', 'transaction_id', 'remarks', 'payment_method_choices']
 
     def get_payment_method_choices(self, obj):
         return dict(Payment.PAYMENT_METHODS)
 
-    def get_service_name(self, obj):
-        # Fetch related sale through the pivot table (Sale_Payment)
-        sale_payment = Sale_Payment.objects.filter(payment=obj).select_related("sale").first()
+    def get_invoice_number(self, obj):
+        return obj.invoice.invoice_number if obj.invoice else None
 
-        if sale_payment and sale_payment.sale.service:
-            return str(sale_payment.sale.service)  # Ensure it returns a string
-
-        return None
+    def get_total_invoice_amount(self, obj):
+        return obj.invoice.total_amount if obj.invoice else None

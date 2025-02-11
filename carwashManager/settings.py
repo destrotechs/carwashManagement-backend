@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'commissions',
     'users',
     'payments',
+    'customers'
 ]
 
 REST_FRAMEWORK = {
@@ -190,3 +191,4 @@ CORS_ALLOW_HEADERS = [
     'content-type',
     'authorization',
 ]
+X_FRAME_OPTIONS = "ALLOWALL"

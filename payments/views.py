@@ -1,9 +1,10 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Payment,Sale_Payment
+from sales.models import Payment
 from .serializers import PaymentSerializer
-from sales.models import Sale
+from sales.models import Invoice
+
 
 # List all payments and create a new payment
 class PaymentListCreateView(generics.ListCreateAPIView):
@@ -11,10 +12,13 @@ class PaymentListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = Payment.objects.all()
+        invoice_id = self.request.GET.get("invoice_id")  # Allow filtering by invoice
         day = self.request.GET.get("day")
         month = self.request.GET.get("month")
         year = self.request.GET.get("year")
 
+        if invoice_id:
+            queryset = queryset.filter(invoice_id=invoice_id)
         if year:
             queryset = queryset.filter(date_paid__year=year)
         if month:
@@ -25,26 +29,34 @@ class PaymentListCreateView(generics.ListCreateAPIView):
         return queryset
 
     def create(self, request, *args, **kwargs):
-        sale_id = request.data.get("sale_id")  # Get sale_id from request if provided
+        invoice_id = request.data.get("invoice_id")  # Get invoice_id from request
+
+        if not invoice_id:
+            return Response({
+                "errors": {"invoice_id": ["This field is required."]},
+                "message": "Payment creation failed",
+                "status": status.HTTP_400_BAD_REQUEST
+            })
 
         # Validate and create the Payment instance
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             payment = serializer.save()
 
-            # If a sale_id is provided, create a pivot entry in Sale_Payment
-            if sale_id:
-                try:
-                    sale = Sale.objects.get(id=sale_id)  # Fetch the Sale instance
-                    sale.is_paid = True
-                    sale.save()  # Update the Sale instance
-                    Sale_Payment.objects.create(sale=sale, payment=payment)
-                except Sale.DoesNotExist:
-                    return Response({
-                        "errors": {"sale_id": ["Sale not found"]},
-                        "message": "Payment creation failed",
-                        "status": status.HTTP_400_BAD_REQUEST
-                    })
+            # Try to update the invoice total paid amount
+            try:
+                invoice = Invoice.objects.get(id=invoice_id)
+                total_paid = sum(invoice.payments.values_list("amount_paid", flat=True))
+
+                invoice.is_paid = total_paid >= invoice.total_amount
+                invoice.save()
+
+            except Invoice.DoesNotExist:
+                return Response({
+                    "errors": {"invoice_id": ["Invoice not found"]},
+                    "message": "Payment creation failed",
+                    "status": status.HTTP_400_BAD_REQUEST
+                })
 
             return Response({
                 "data": serializer.data,
@@ -58,6 +70,8 @@ class PaymentListCreateView(generics.ListCreateAPIView):
             "status": status.HTTP_400_BAD_REQUEST
         })
 
+
+# Retrieve, update, or delete a specific payment
 # Retrieve, update, or delete a specific payment
 class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Payment.objects.all()
@@ -70,6 +84,14 @@ class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
         if serializer.is_valid():
             serializer.save()
+
+            # Update invoice payment status after modification
+            if instance.invoice:
+                invoice = instance.invoice
+                total_paid = sum(invoice.payments.values_list("amount_paid", flat=True))
+                invoice.is_paid = total_paid >= invoice.total_amount
+                invoice.save()
+
             return Response({
                 "data": serializer.data,
                 "message": "Payment updated successfully",
@@ -80,6 +102,7 @@ class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
             "message": "Payment update failed",
             "status": status.HTTP_400_BAD_REQUEST
         })
+
 
 # Get available payment methods
 class PaymentMethodsView(APIView):
