@@ -16,6 +16,7 @@ class PaymentListCreateView(generics.ListCreateAPIView):
         day = self.request.GET.get("day")
         month = self.request.GET.get("month")
         year = self.request.GET.get("year")
+        customer_id = self.request.GET.get("customer_id")
 
         if invoice_id:
             queryset = queryset.filter(invoice_id=invoice_id)
@@ -25,6 +26,8 @@ class PaymentListCreateView(generics.ListCreateAPIView):
             queryset = queryset.filter(date_paid__month=month)
         if day:
             queryset = queryset.filter(date_paid__day=day)
+        if customer_id:
+            queryset = queryset.filter(invoice__customer_id=customer_id)
 
         return queryset
 

@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from .models import Customer, Vehicle, ServiceRecord,Appointment
 from .serializers import CustomerSerializer, VehicleSerializer, ServiceRecordSerializer,AppointmentSerializer
 from rest_framework.decorators import action
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
 class CustomersListView(generics.ListCreateAPIView):
     queryset = Customer.objects.all().order_by('-date_created')
     serializer_class = CustomerSerializer
@@ -44,9 +46,40 @@ class VehicleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(vehicles, many=True)
         return Response(serializer.data)
 
-class ServiceRecordViewSet(viewsets.ModelViewSet):
-    queryset = ServiceRecord.objects.all()
-    serializer_class = ServiceRecordSerializer
+class CustomerServiceRecordsView(APIView):
+    def get(self, request, customer_id):
+        customer = get_object_or_404(Customer, pk=customer_id)
+
+        # Fetch all vehicles for the customer
+        vehicles = customer.vehicles.all()
+
+        data = {
+            "customer": customer.name,
+            "vehicles": []
+        }
+
+        for vehicle in vehicles:
+            # Get all service records for the current vehicle
+            services = ServiceRecord.objects.filter(vehicle=vehicle).order_by('-service_date')
+
+            vehicle_data = {
+                "plate_number": vehicle.plate_number,
+                "make": vehicle.make,
+                "model": vehicle.model,
+                "services": [
+                    {
+                        "service": service.service.name,
+                        "cost": str(service.cost),
+                        "service_date": service.service_date.strftime('%Y-%m-%d'),
+                        "notes": service.notes
+                    }
+                    for service in services
+                ]
+            }
+
+            data["vehicles"].append(vehicle_data)
+
+        return Response(data, status=status.HTTP_200_OK)
 class AppointmentViewSet(viewsets.ModelViewSet):
     queryset = Appointment.objects.all()
     serializer_class = AppointmentSerializer

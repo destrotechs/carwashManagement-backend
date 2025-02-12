@@ -16,7 +16,7 @@ class SaleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Sale
-        fields = ['id', 'service', 'service_name', 'amount', 'is_paid', 'date', 'employee', 'employee_name', 'customer', 'customer_name', 'invoice', 'invoice_number']
+        fields = ['id', 'service', 'service_name', 'amount', 'is_paid', 'date', 'employee', 'employee_name', 'customer', 'customer_name', 'invoice', 'invoice_number','tax_amount','tax_rate','total_amount']
 
     def get_service_name(self, obj):
         return obj.service.name if obj.service else None
@@ -44,15 +44,16 @@ class InvoiceSerializer(serializers.ModelSerializer):
     sales = serializers.PrimaryKeyRelatedField(queryset=Sale.objects.all(), many=True, required=False)
     total_amount = serializers.SerializerMethodField()
     pdf_url = serializers.SerializerMethodField()
+    customer_name = serializers.SerializerMethodField()
 
 
     class Meta:
         model = Invoice
-        fields = ['id', 'invoice_number', 'sales', 'total_amount','customer','date_issued','pdf_url']
+        fields = ['id', 'invoice_number', 'sales', 'total_amount','customer_name','date_issued','pdf_url']
 
     def get_total_amount(self, obj):
         """Calculate the total amount from linked sales."""
-        return sum(sale.amount for sale in obj.sales.all())
+        return sum(sale.amount+sale.tax_amount for sale in obj.sales.all())
 
     def get_pdf_url(self, obj):
         request = self.context.get("request")
@@ -68,3 +69,5 @@ class InvoiceSerializer(serializers.ModelSerializer):
                 sale.save()
 
         return invoice
+    def get_customer_name(self,obj):
+        return obj.customer.name if obj.customer else None
